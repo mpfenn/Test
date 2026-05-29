@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECharts Example</title>
+
+  <!-- ECharts CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts-gl/dist/echarts-gl.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f5f5f5;
+    }
+
+    #chart {
+      width: 1200px;
+      height: 800px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="chart"></div>
+
+  <script>
+    // Initialize chart
+    const chart = echarts.init(document.getElementById('chart'));
+
+    const data = [
+  [0, 0, 0],
+  [0, 1, 1],
+  [0, 2, 4],
+  [1, 0, 1],
+  [1, 1, 2],
+  [1, 2, 3],
+];
+
+    // Chart options
+    const option = {
+  tooltip: {},
+  backgroundColor: '#fff',
+  visualMap: {
+    show: true,
+    dimension: 2,
+    min: -1,
+    max: 5,
+    inRange: {
+      color: [
+        '#313695',
+        '#4575b4',
+        '#74add1',
+        '#abd9e9',
+        '#e0f3f8',
+        '#ffffbf',
+        '#fee090',
+        '#fdae61',
+        '#f46d43',
+        '#d73027',
+        '#a50026'
+      ]
+    }
+  },
+  xAxis3D: {
+    type: 'value',
+    name: 'time',
+    axisLabel: {
+      formatter: function (value) {
+        return value.toFixed(1) + ' s';
+      }
+    }
+  },
+  yAxis3D: {
+    type: 'value',
+    name: 'Height in m'
+  },
+  zAxis3D: {
+    type: 'value',
+    name: 'Bla'
+  },
+  grid3D: {
+    viewControl: {
+      // projection: 'orthographic'
+    }
+  },
+  series: [
+    {
+      type: 'surface',
+      wireframe: {
+        // show: false
+      },
+      data: data,
+    }
+  ]
+};
+
+    // Set options
+    chart.setOption(option);
+
+    // Resize chart on window resize
+    window.addEventListener('resize', () => {
+      chart.resize();
+    });
+  </script>
+
+</body>
+</html>
