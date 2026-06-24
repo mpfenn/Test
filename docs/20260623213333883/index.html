@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>21:33 Gas Dryer</title>
+<style>
+body {
+    margin: 10px;
+    font-family: Arial, sans-serif;
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 10px;
+    max-height: 100%;
+    overflow-y: auto;
+}
+.param-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.param-table th,
+.param-table td {
+    border: 1px solid #ccc;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.param-table th {
+    background: #f5f5f5;
+    font-weight: bold;
+}
+
+#tableParameters_Adsorption { display: none; }
+#arrowParameters_Adsorption {
+    display: inline-block;
+    width: 20px;
+}
+#tableAnalysis_Adsorption { display: none; }
+#arrowAnalysis_Adsorption {
+    display: inline-block;
+    width: 20px;
+}
+
+.param-table tr:nth-child(even) {
+    background: #fafafa;
+}
+.table-toggle {
+    cursor: pointer;
+    font-weight: bold;
+    margin-bottom: 8px;
+    user-select: none;
+}
+
+.plot-container {
+    position: relative;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 400px;
+    height: clamp(400px, 40vh, 700px);
+}
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    background: transparent;
+}
+.plot-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+.open-plot-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1;
+    text-decoration: none;
+    user-select: none;
+    color: #222;
+    background: rgba(245,245,245,0.95);
+    border: 1px solid #cfcfcf;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.open-plot-btn:hover {
+    background: #ffffff;
+    border-color: #bdbdbd;
+}
+.open-plot-btn:active {
+    transform: translateY(1px);
+}
+.open-plot-btn:focus-visible {
+    outline: 2px solid #9ec5ff;
+    outline-offset: 2px;
+}
+</style>
+<script>
+function toggleTable(tableId, element) {
+    const table = document.getElementById(tableId);
+    const arrow = element.querySelector("span");
+
+    const visible = table.style.display !== "none";
+
+    if (visible) {
+        table.style.display = "none";
+        arrow.textContent = "▶";
+    } else {
+        table.style.display = "block";
+        arrow.textContent = "▼";
+    }
+}
+
+function openPlot(url) {
+    window.open(url, "_blank");
+}
+
+// Track which frames are active
+const activeFrames = new Set();
+
+// Limit simultaneous WebGL contexts
+const MAX_ACTIVE = 4;
+
+function loadFrame(frame) {
+    if (!frame.src && frame.dataset.src) {
+        frame.src = frame.dataset.src;
+    }
+    activeFrames.add(frame);
+}
+
+function unloadFrame(frame) {
+    // Destroy WebGL context by removing iframe src
+    frame.src = "";
+    activeFrames.delete(frame);
+}
+
+// Observe visibility
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const frame = entry.target;
+
+        if (entry.isIntersecting) {
+            // Load frame if needed
+            if (!frame.src) {
+                loadFrame(frame);
+            }
+
+            // Enforce WebGL limit
+            if (activeFrames.size > MAX_ACTIVE) {
+                const oldest = activeFrames.values().next().value;
+                unloadFrame(oldest);
+            }
+
+        } else {
+            // OUT OF VIEW → destroy WebGL context
+            unloadFrame(frame);
+        }
+    });
+}, {
+    root: null,
+    threshold: 0.15
+});
+
+// Init
+document.querySelectorAll(".plot-frame").forEach(frame => {
+    observer.observe(frame);
+});
+</script>
+</head>
+<body>
+<!-- ================= PARAMETER TABLE ================= -->
+<div class="table-toggle" onclick="toggleTable('tableParameters_Adsorption', this)">
+<span id="arrow">▶</span> Parameters Adsorption
+</div>
+<div id="tableParameters_Adsorption">
+<table class="param-table"">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Symbol</th>
+            <th>Value</th>
+            <th>Typical Range / Reference</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Simulation Time</td>
+            <td>t</td>
+            <td>[0 7.2e+06] s</td>
+            <td>Simulation halts integration at end time if Stop Mode is 0</td>
+        </tr>
+        <tr>
+            <td>Ode Options</td>
+            <td></td>
+            <td>AbsTol: 1e-06; Events: not printable; RelTol: 1e-06</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DGL Function Name</td>
+            <td></td>
+            <td>gasDryerDGL</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Event Function Name</td>
+            <td></td>
+            <td>@(t,y)gasDryerEvent(t,y,obj.para)</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Solver</td>
+            <td></td>
+            <td>ode15s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Max Solver Run time</td>
+            <td></td>
+            <td>-1 s</td>
+            <td>-1 means it is deactivated</td>
+        </tr>
+        <tr>
+            <td>Discretization Number</td>
+            <td></td>
+            <td>50 </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Distance between Points</td>
+            <td>Δx</td>
+            <td>0.04 m</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Stop Mode</td>
+            <td></td>
+            <td>1 </td>
+            <td>0 := tspan Stops Integration; 1 := H₂ Concentration Stops Integration</td>
+        </tr>
+        <tr>
+            <td>Threshold for H₂ Concentration</td>
+            <td></td>
+            <td>99.9999 mol-%</td>
+            <td>This only applies if stopMode is 1</td>
+        </tr>
+        <tr>
+            <td>Threshold for H₂ Concentration after Regeneration</td>
+            <td></td>
+            <td>100 mol-%</td>
+            <td>This only applies if stopMode is 1</td>
+        </tr>
+        <tr>
+            <td>Threshold for H₂ Concentration Kick In Time</td>
+            <td></td>
+            <td>600 s</td>
+            <td>This only applies if stopMode is 1</td>
+        </tr>
+        <tr>
+            <td>Threshold for H₂ Concentration Stop Tolerance</td>
+            <td></td>
+            <td>0.0001 </td>
+            <td>This only applies if stopMode is 1</td>
+        </tr>
+        <tr>
+            <td>Operating Condition</td>
+            <td></td>
+            <td>0 </td>
+            <td>0 := Adsorption; 1 := Regeneration; 2 := Cooling</td>
+        </tr>
+        <tr>
+            <td>Column Height</td>
+            <td>L</td>
+            <td>2 m</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Diameter</td>
+            <td>d</td>
+            <td>0.5 m</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Cross Section Area</td>
+            <td>A</td>
+            <td>0.19635 m²</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Wall Thickness</td>
+            <td>δ<sub>W</sub></td>
+            <td>15 mm</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Wall Heat Capacity</td>
+            <td>cp<sub>Wall</sub></td>
+            <td>485 J/(kgK)</td>
+            <td>0.47 (20°C)...0.5(100°C) kJ/kgK based on VDI-Wärmeatlas: Fachlicher Träger VDI-Gesellschaft Verfahrenstechnik und Chemieingenieurwesen. Berlin, Heidelberg: Springer Berlin Heidelberg, 2019. doi: 10.1007/978-3-662-52989-8. Page: 654, MaterialNumber. 1.4301</td>
+        </tr>
+        <tr>
+            <td>Column Wall Density</td>
+            <td>ρ<sub>Wall</sub></td>
+            <td>7900 kg/m³</td>
+            <td>@20°C based on VDI-Wärmeatlas: Fachlicher Träger VDI-Gesellschaft Verfahrenstechnik und Chemieingenieurwesen. Berlin, Heidelberg: Springer Berlin Heidelberg, 2019. doi: 10.1007/978-3-662-52989-8. Page: 648, MaterialNumber. 1.4301</td>
+        </tr>
+        <tr>
+            <td>Column Wall Volume</td>
+            <td>V<sub>Wall</sub></td>
+            <td>0.0485376 m³</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Wall Mass</td>
+            <td>m<sub>Wall</sub></td>
+            <td>383.447 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column Wall Mass per Section</td>
+            <td>m<sub>Wall</sub></td>
+            <td>7.66894 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Column internal Volume</td>
+            <td>V<sub>Col</sub></td>
+            <td>0.392699 m³</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Grain Size</td>
+            <td>d<sub>p</sub></td>
+            <td>0.0035 m</td>
+            <td>Pore diameter 3...5 mm based on BASF, 'Sorbead® Air R - Product Data Sheet.' Aug. 2020. Accessed: Jan. 13, 2026. [Online]. Available: https://download.basf.com/p1/8a8082048fa5910c018fc44db3fe651c/en/Sorbead%C2%AEAir_R_Datasheet_Technical_Data_Sheet_English.pdf?view</td>
+        </tr>
+        <tr>
+            <td>Effective Mass Transfer Coefficient</td>
+            <td>k<sub>eff</sub></td>
+            <td>0.0188 kg/(m²s)</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Heat Capacity Adsorbent</td>
+            <td>c<sub>p,Ads</sub></td>
+            <td>960 J/kgK</td>
+            <td>0.92...1 kJ/kgK based on D. Bathen and M. Breitbach, Adsorptionstechnik. Berlin, Heidelberg: Springer Berlin Heidelberg, 2001. doi: 10.1007/978-3-642-18235-8. p. 29</td>
+        </tr>
+        <tr>
+            <td>Adsorbent Bed Porosity</td>
+            <td>ε<sub>L</sub></td>
+            <td>0.385 </td>
+            <td>Validate!!!! 0.37 - 0.40 for sphereical objects based on Kast 1988 p. 126</br>0.45-0.65 based on D. Bathen and M. Breitbach, Adsorptionstechnik. Berlin, Heidelberg: Springer Berlin Heidelberg, 2001. doi: 10.1007/978-3-642-18235-8. p. 29 or 132???</td>
+        </tr>
+        <tr>
+            <td>Adsorbent Apparent Particle Density</td>
+            <td>ρ<sub>S</sub></td>
+            <td>1000 kg/m³</td>
+            <td>750 - 1250 kg/m³ based on D. Bathen and M. Breitbach, Adsorptionstechnik. Berlin, Heidelberg: Springer Berlin Heidelberg, 2001. doi: 10.1007/978-3-642-18235-8. p. 29</td>
+        </tr>
+        <tr>
+            <td>Bulk Density Packed Bed</td>
+            <td>ρ<sub>Bulk</sub></td>
+            <td>615 kg/m³</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Enthalpy Adsorbtion</td>
+            <td>ΔH<sub>ads</sub></td>
+            <td>41200 J/(molK)</td>
+            <td>based on I. Hraiech et al., 'Experimental characterization of silica gel adsorption and desorption isotherms under varying temperature and relative humidity in a fixed bed reactor,' Sci Rep, vol. 15, no. 1, p. 29041, Aug. 2025, doi: 10.1038/s41598-025-14677-7.</br>2.98e3 kJ/kg (53685 J/mol), 2.8e3 - 3.5e3 kJ/kg (50442 - 63053 J/mol), 2.8e3 kJ/kg (50442 J/mol) listed in H. T. Chua, K. C. Ng, A. Chakraborty, N. M. Oo, and M. A. Othman, 'Adsorption Characteristics of Silica Gel + Water Systems,' J. Chem. Eng. Data, vol. 47, no. 5, pp. 1177–1181, Sep. 2002, doi: 10.1021/je0255067.</td>
+        </tr>
+        <tr>
+            <td>Adsorbent Vol. Spez. Surface</td>
+            <td>A<sub>sp</sub></td>
+            <td>1714.29 1/m</td>
+            <td>Equation from ChatGPT Asp = 6 · (1 - ε<sub>L</sub>)/d<sub>p</sub>. Validate!</td>
+        </tr>
+        <tr>
+            <td>Adsorbent Dry Mass</td>
+            <td>m<sub>ads,dry</sub></td>
+            <td>241.51 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mixture for Constant Properties</td>
+            <td></td>
+            <td>H2      :                    99 mol-%; H2O     :                     1 mol-%</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Temperature for Constant Properties</td>
+            <td>T</td>
+            <td>298.15 K = 25 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Pressure for Constant Properties</td>
+            <td>p</td>
+            <td>3000 kPa</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Heat Capacity Water</td>
+            <td>c<sub>p,H<sub>2</sub>O</sub></td>
+            <td>86.5452 J/(molK)</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Heat Capacity Hydrogen</td>
+            <td>c<sub>p,H<sub>2</sub></sub></td>
+            <td>28.9971 J/(molK)</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mole Mass Gas Mixture</td>
+            <td>M<sub>Fluid</sub></td>
+            <td>2.17587 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mole Mass H2O</td>
+            <td>M<sub>H<sub>2</sub>O</sub></td>
+            <td>18.0153 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mole Mass H2</td>
+            <td>M<sub>H<sub>2</sub></sub></td>
+            <td>2.01588 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Density Gas Mixture</td>
+            <td>ρ<sub>Fluid</sub></td>
+            <td>1.18993 mol/l</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Heat Capacity Gas Mixture</td>
+            <td>c<sub>p,Fluid</sub></td>
+            <td>29.0584 J/(molK)</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Temperature Environment</td>
+            <td>T<sub>amb</sub></td>
+            <td>298.15 K = 25 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input H2</td>
+            <td>x<sub>H<sub>2</sub></sub></td>
+            <td>90 mol-%</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Mixture</td>
+            <td></td>
+            <td>CH4     : Methane        ; N       : Nitrogen       ; CO2     : CarbonDioxide  ; C2H6    : Ethane         ; C3H8    : Propane        ; C4H10   : Isobutane      ; C4H10n  : n_Butane       ; C5H12   : Isopentane     ; C5H12n  : n_Pentane      ; C6H14n  : n_Hexane       ; C7H16n  : n_Heptane      ; C8H18n  : n_Octane       ; C9H20n  : n_Nonane       ; C10H22n : n_Decane       ; H2      : Hydrogen       ; O2      : Oxygen         ; CO      : CarbonMonoxide ; H2O     : Water          ; H2S     : HydrogenSulfide; He      : Helium         ; Ar      : Argon          </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Temperature</td>
+            <td>T<sub>in</sub></td>
+            <td>303.15 K = 30 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Temperature for Regeneration</td>
+            <td>T<sub>in</sub></td>
+            <td>393.15 K = 120 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Temperature for Regeneration Switching Time</td>
+            <td></td>
+            <td>600 s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Temperature for Cooling</td>
+            <td>T<sub>in</sub></td>
+            <td>303.15 K = 30 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Temperature for Cooling Switching Time</td>
+            <td></td>
+            <td>60 s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Gas Pressure</td>
+            <td>p<sub>in</sub></td>
+            <td>3000 kPa</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Molar Flow</td>
+            <td>n<sub>in</sub></td>
+            <td>2 mol/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Volume Flow</td>
+            <td>V˙<sub>in</sub></td>
+            <td>0.00168035 m³/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Input Adsorbent Temperature</td>
+            <td>T<sub>ads</sub></td>
+            <td>303.15 K = 30 °C</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+</div>
+<!-- ================= PARAMETER TABLE ================= -->
+<div class="table-toggle" onclick="toggleTable('tableAnalysis_Adsorption', this)">
+<span id="arrow">▶</span> Analysis Adsorption
+</div>
+<div id="tableAnalysis_Adsorption">
+<table class="param-table"">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Symbol</th>
+            <th>Value</th>
+            <th>Typical Range / Reference</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Time to Threshold Breach (H<sub>2,out</sub>   99.9999 mol-%)</td>
+            <td></td>
+            <td>239.133 h</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Total Loading</td>
+            <td></td>
+            <td>48.0318 %</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Adsorbent Temperature Max</td>
+            <td>T<sub>a,max</sub></td>
+            <td>303.298 K = 30.148 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Adsorbent Temperature Min</td>
+            <td>T<sub>a,min</sub></td>
+            <td>303.132 K = 29.9817 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Gas Temperature Max</td>
+            <td>T<sub>g,max</sub></td>
+            <td>303.249 K = 30.0986 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Gas Temperature Min</td>
+            <td>T<sub>g,min</sub></td>
+            <td>303.132 K = 29.9817 °C</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Molar Mass Gas In Min</td>
+            <td>M<sub>Gas,min</sub></td>
+            <td>2.01588 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Molar Mass Gas In Average</td>
+            <td>M<sub>Gas,Average</sub></td>
+            <td>2.04629 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Molar Mass Gas In Max</td>
+            <td>M<sub>Gas,max</sub></td>
+            <td>2.05435 g/mol</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow In Average</td>
+            <td></td>
+            <td>4.09258 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass In</td>
+            <td>m<sub>Gas,in</sub></td>
+            <td>3523.22 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Norm Volume Flow In (0 °C, 1.01325 bar)</td>
+            <td></td>
+            <td>0.0448279 m³/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Norm Volume In (0 °C, 1.01325 bar)</td>
+            <td></td>
+            <td>38591.5 Nm³</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2,out,min</sub></td>
+            <td></td>
+            <td>4.01742 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2,out,average</sub></td>
+            <td></td>
+            <td>4.01751 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2,out,max</sub></td>
+            <td></td>
+            <td>4.01856 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass H<sub>2,out</sub></td>
+            <td>m<sub>H<sub>2</sub>,out</sub></td>
+            <td>3458.52 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2</sub>O<sub>out,min</sub></td>
+            <td></td>
+            <td>0 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2</sub>O<sub>out,average</sub></td>
+            <td></td>
+            <td>9.79578e-07 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass Flow H<sub>2</sub>O<sub>out,max</sub></td>
+            <td></td>
+            <td>3.59024e-05 g/s</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Mass H<sub>2</sub>O<sub>out</sub></td>
+            <td>m<sub>H<sub>2</sub>O<sub>out</sub></sub></td>
+            <td>0.529955 g</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Stored H<sub>2</sub>O in Adsorbent</td>
+            <td>m<sub>Bound H<sub>2</sub>O,min</sub></td>
+            <td>0 g</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Stored H<sub>2</sub>O in Adsorbent</td>
+            <td>m<sub>Bound H<sub>2</sub>O,Average</sub></td>
+            <td>29.5761 kg</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Stored H<sub>2</sub>O in Adsorbent</td>
+            <td>m<sub>Bound H<sub>2</sub>O,max</sub></td>
+            <td>74.5851 kg</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+</div>
+<!-- ================= PLOTS ================= -->
+<div class="grid">
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y1_Loading_Adsorbent.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y1_Loading_Adsorbent.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y1_Loading__Rate_of_Change.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y1_Loading__Rate_of_Change.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y2_Temperature_Adsorbent.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y2_Temperature_Adsorbent.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y2_Temperature_Adsorbent__Heat_Adsorbent.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y2_Temperature_Adsorbent__Heat_Adsorbent.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y2_Temperature_Adsorbent__Heat_Transfer.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y2_Temperature_Adsorbent__Heat_Transfer.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y3_Concentraion_Gas__Convection.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y3_Concentraion_Gas__Convection.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y3_Concentraion_Gas__Diffusion.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y3_Concentraion_Gas__Diffusion.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y3_Concentraion_Gas__Source.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y3_Concentraion_Gas__Source.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y3_Concentration_Gas.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y3_Concentration_Gas.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y4_Temperature_Gas.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y4_Temperature_Gas.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y4_Temperature_Gas__Convection.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y4_Temperature_Gas__Convection.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y4_Temperature_Gas__Diffusion.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y4_Temperature_Gas__Diffusion.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y4_Temperature_Gas__Heat_Ads__Gas.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y4_Temperature_Gas__Heat_Ads__Gas.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_y4_Temperature_Gas__Heat_Gas__Ambient.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_y4_Temperature_Gas__Heat_Gas__Ambient.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Axial_Diffusion.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Axial_Diffusion.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Concentraion_Gas_H2.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Concentraion_Gas_H2.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Concentraion_Gas_Mixture.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Concentraion_Gas_Mixture.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Equalibrium_Loading.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Equalibrium_Loading.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Heat_Transfer_Coefficient_Gas.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Heat_Transfer_Coefficient_Gas.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Heat_Transfer_Coefficient_Particle.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Heat_Transfer_Coefficient_Particle.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Kinematic_Viscosity_Pure_Hydrogen.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Kinematic_Viscosity_Pure_Hydrogen.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Loading.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Loading.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Loading_Surf.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Loading_Surf.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Mole_Fraction_H2.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Mole_Fraction_H2.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Mole_Fraction_H2O.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Mole_Fraction_H2O.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Partial_Pressure_H2O.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Partial_Pressure_H2O.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Pressure.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Pressure.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Thermal_Conductivity.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Thermal_Conductivity.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Thermal_Conductivity_Pure_Hydrogen.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Thermal_Conductivity_Pure_Hydrogen.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Velocity_Empty_Adsorber.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Velocity_Empty_Adsorber.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Velocity_Packed_Beds.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Velocity_Packed_Beds.html" loading="lazy"></iframe>
+</div>
+<div class="plot-container">
+<a class="open-plot-btn" href="./20260623213333883_Volume_Flow.html" target="_blank" rel="noopener" title="Open plot in new tab">Open</a>
+<iframe class="plot-frame" src="./20260623213333883_Volume_Flow.html" loading="lazy"></iframe>
+</div>
+</div>
+</body>
+</html>
